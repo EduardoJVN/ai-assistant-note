@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0 (2026-03-02)
+
+
+### Features
+
+* add global error ([ed50c4d](https://github.com/EduardoJVN/ai-assistant-note/commit/ed50c4db84147d4bad0b59b6ac058c95f2a00d3a))
+* express base ([721b03b](https://github.com/EduardoJVN/ai-assistant-note/commit/721b03b7c6d2d374382dc956023e1f1d36d8524d))
+
+
+### Bug Fixes
+
+* express base ([f8efd8d](https://github.com/EduardoJVN/ai-assistant-note/commit/f8efd8d423153e4e5112c56bff3c8eff2f720641))
+
 ## [1.2.0](https://github.com/EduardoJVN/typescript-hexagonal-clean-template/compare/v1.1.1...v1.2.0) (2026-03-02)
 
 
