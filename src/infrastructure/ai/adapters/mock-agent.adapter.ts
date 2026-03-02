@@ -6,7 +6,7 @@ export class MockAgentAdapter implements IAgentProvider {
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     const lowercaseText = text.toLowerCase();
-    
+
     if (lowercaseText.includes('excelente') || lowercaseText.includes('bueno')) {
       return { label: 'positivo', confidence: 0.95 };
     }

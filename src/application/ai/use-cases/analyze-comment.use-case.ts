@@ -4,7 +4,7 @@ import type { ILogger } from '@domain/ports/logger.port.js';
 export class AnalyzeCommentUseCase {
   constructor(
     private readonly agent: IAgentProvider,
-    private readonly logger: ILogger
+    private readonly logger: ILogger,
   ) {}
 
   async execute(comment: string): Promise<AgentAnalysis> {
@@ -21,11 +21,9 @@ export class AnalyzeCommentUseCase {
       return result;
     } catch (error) {
       this.logger.error('Error en el agente de IA', { error });
-      throw new Error('No se pudo procesar el análisis en este momento',
-        { 
-          cause: error 
-        }
-      );
+      throw new Error('No se pudo procesar el análisis en este momento', {
+        cause: error,
+      });
     }
   }
 }

@@ -1,7 +1,10 @@
 import { ProductNotFoundError } from '@domain/product/errors/product-not-found.error.js';
 import type { IProductRepository } from '@domain/product/ports/product.repository.port.js';
 import type { ILogger } from '@domain/ports/logger.port.js';
-import type { UpdateProductCommand, UpdateProductResult } from '@application/product/dto/update-product.dto.js';
+import type {
+  UpdateProductCommand,
+  UpdateProductResult,
+} from '@application/product/dto/update-product.dto.js';
 
 export class UpdateProductUseCase {
   constructor(

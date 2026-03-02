@@ -1,7 +1,10 @@
 import { Product } from '@domain/product/entities/product.entity.js';
 import type { IProductRepository } from '@domain/product/ports/product.repository.port.js';
 import type { ILogger } from '@domain/ports/logger.port.js';
-import type { CreateProductCommand, CreateProductResult } from '@application/product/dto/create-product.dto.js';
+import type {
+  CreateProductCommand,
+  CreateProductResult,
+} from '@application/product/dto/create-product.dto.js';
 
 export class CreateProductUseCase {
   constructor(
