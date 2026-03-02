@@ -10,4 +10,5 @@ export const ENV = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   PORT: process.env.PORT || 3000,
   APP_NAME: pkg.name || 'api-service',
+  HOST: process.env.HOST || 'localhost',
 };
