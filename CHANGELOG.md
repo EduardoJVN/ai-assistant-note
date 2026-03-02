@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0](https://github.com/EduardoJVN/ai-assistant-note/compare/v1.0.1...v1.1.0) (2026-03-02)
+
+
+### Features
+
+* create front html test ([93a1a13](https://github.com/EduardoJVN/ai-assistant-note/commit/93a1a1362ee3b730e4da3d72285f7968a2be22d8))
+* module audio stream ([5fabf37](https://github.com/EduardoJVN/ai-assistant-note/commit/5fabf37a1d10cf7e766a183be2bfedb53bd94f55))
+* server socket ([e66b4d3](https://github.com/EduardoJVN/ai-assistant-note/commit/e66b4d3c4ab438b81178a3d97054f74b5c0b758e))
+
 ## [1.0.1](https://github.com/EduardoJVN/ai-assistant-note/compare/v1.0.0...v1.0.1) (2026-03-02)
 
 
