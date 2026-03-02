@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/EduardoJVN/ai-assistant-note/compare/v1.0.0...v1.0.1) (2026-03-02)
+
+
+### Bug Fixes
+
+* eslint format ([d9029b6](https://github.com/EduardoJVN/ai-assistant-note/commit/d9029b6d29ca925d62db4b26f29776eda1d3e04c))
+* eslint format ([9beeebb](https://github.com/EduardoJVN/ai-assistant-note/commit/9beeebb5977774d41e54c85dbb4b6938c4f60068))
+
 ## 1.0.0 (2026-03-02)
 
 
