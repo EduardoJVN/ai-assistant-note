@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { join } from 'node:path';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { ENV } from '@infra/config/env.config.js';
@@ -19,6 +20,7 @@ async function bootstrap() {
 
   const app = express();
   app.use(express.json());
+  app.use(express.static(join(process.cwd(), 'public')));
   app.use(
     registerRoutes({
       product: createProductModule(logger, errorReporter),
