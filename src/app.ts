@@ -9,6 +9,7 @@ import { LoggerErrorReporter } from '@infra/adapters/logger-error-reporter.adapt
 import { registerRoutes } from '@infra/entry-points/router.js';
 import { createSocketServer } from '@infra/entry-points/socket-server.js';
 import { createProductModule } from '@infra/modules/product.module.js';
+import { createAudioStreamSocketModule } from '@infra/modules/audio-stream.socket-module.js';
 
 async function bootstrap() {
   const logger = new Logger();
@@ -35,11 +36,7 @@ async function bootstrap() {
 
   const httpServer = createServer(app);
 
-  createSocketServer(
-    httpServer,
-    [], // add socket gateways here as modules are created
-    logger,
-  );
+  createSocketServer(httpServer, [createAudioStreamSocketModule(logger, errorReporter)], logger);
 
   httpServer.listen(ENV.PORT, () => {
     reportBootstrap(logger);
