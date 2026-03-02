@@ -804,6 +804,114 @@ describe('PlaceOrderUseCase', () => {
 
 ---
 
+## Socket.io Layer
+
+**Library:** Socket.io 4. The HTTP server is shared between Express and Socket.io — both listen on the same port.
+
+### File responsibilities
+
+| File | Responsibility |
+|---|---|
+| `socket-gateway.ts` | `BaseSocketGateway` — abstract base with `handleEvent()`. Mirrors `BaseController`. |
+| `socket-server.ts` | `createSocketServer(httpServer, gateways, logger)` — initializes `io`, registers gateways on connection. |
+| `{module}.socket-gateway.ts` | Concrete gateway for one module. Extends `BaseSocketGateway`, implements `register(socket)`. |
+| `modules/{module}.socket-module.ts` | Module factory for socket gateways. Mirrors `{module}.module.ts`. |
+
+### Error handling — BaseSocketGateway
+
+Mirrors `BaseController` exactly. `handleEvent` maps domain errors to socket response codes and reports unexpected errors via `IErrorReporter`.
+
+```typescript
+// src/infrastructure/entry-points/{module}.socket-gateway.ts
+export class {Module}SocketGateway extends BaseSocketGateway {
+  constructor(
+    errorReporter: IErrorReporter,
+    private readonly someUseCase: SomeUseCase,
+  ) {
+    super(errorReporter);
+  }
+
+  register(socket: Socket): void {
+    socket.on('{module}:{action}', (data: unknown, callback: (res: unknown) => void) => {
+      void this.handleEvent(
+        () => this.someUseCase.execute(data as SomeCommand),
+        (result) => callback({ code: 200, data: result }),
+        (error) => callback({ code: error.code, error: error.message }),
+      );
+    });
+  }
+}
+```
+
+### Event naming convention
+
+`{module}:{action}` — lowercase, colon-separated.
+
+```
+product:create   product:list   product:get   product:update   product:delete
+user:login       user:logout
+chat:message     chat:join
+```
+
+### socket-server.ts — gateway registry
+
+```typescript
+// src/infrastructure/entry-points/socket-server.ts
+export function createSocketServer(
+  httpServer: HttpServer,
+  gateways: BaseSocketGateway[],  // one entry per gateway
+  logger: ILogger,
+): Server {
+  const io = new Server(httpServer, { cors: { origin: '*' } });
+
+  io.on('connection', (socket) => {
+    logger.info('Socket connected', { socketId: socket.id });
+    gateways.forEach((gateway) => gateway.register(socket));
+    socket.on('disconnect', (reason) => {
+      logger.info('Socket disconnected', { socketId: socket.id, reason });
+    });
+  });
+
+  return io;
+}
+```
+
+### app.ts — wiring sockets
+
+`httpServer` is shared. Express handles HTTP, Socket.io handles WebSocket — same port.
+
+```typescript
+const httpServer = createServer(app);       // node:http wraps the express app
+
+createSocketServer(
+  httpServer,
+  [
+    create{Module}SocketModule(logger, errorReporter),  // one entry per socket module
+  ],
+  logger,
+);
+
+httpServer.listen(ENV.PORT, () => { reportBootstrap(logger); });
+```
+
+### Adding a new socket module — checklist
+
+```
+1. src/infrastructure/entry-points/{module}.socket-gateway.ts  ← extends BaseSocketGateway
+2. src/infrastructure/modules/{module}.socket-module.ts        ← create{Module}SocketGateway(logger, errorReporter)
+3. app.ts → add create{Module}SocketModule(logger, errorReporter) to the gateways array
+```
+
+### Rules
+
+- Never import `socket.io` outside `infrastructure/entry-points/`.
+- Gateways never import Express types — they are independent transports.
+- `handleEvent` is the only try/catch in a gateway — same rule as `handleRequest` in controllers.
+- Use acknowledgement callbacks (`callback(response)`) for request/response semantics over sockets.
+- Use `socket.emit` or `io.emit` only for server-initiated pushes (notifications, broadcasts).
+
+---
+
 ## Tooling Notes
 
 - **Runtime:** Node.js 24 ESM native — `import/export` only, never `require()`

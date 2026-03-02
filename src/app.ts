@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { ENV } from '@infra/config/env.config.js';
@@ -6,6 +7,7 @@ import { registerProcessErrorHandlers } from '@infra/config/process-error-handle
 import { Logger } from '@infra/adapters/pino-logger.adapter.js';
 import { LoggerErrorReporter } from '@infra/adapters/logger-error-reporter.adapter.js';
 import { registerRoutes } from '@infra/entry-points/router.js';
+import { createSocketServer } from '@infra/entry-points/socket-server.js';
 import { createProductModule } from '@infra/modules/product.module.js';
 
 async function bootstrap() {
@@ -31,7 +33,15 @@ async function bootstrap() {
     res.status(500).json({ error: 'Internal server error' });
   });
 
-  app.listen(ENV.PORT, () => {
+  const httpServer = createServer(app);
+
+  createSocketServer(
+    httpServer,
+    [], // add socket gateways here as modules are created
+    logger,
+  );
+
+  httpServer.listen(ENV.PORT, () => {
     reportBootstrap(logger);
   });
 }

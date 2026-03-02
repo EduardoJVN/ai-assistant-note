@@ -1,5 +1,5 @@
 {
-  "name": "hexagonal-clean-template",
+  "name": "ai-assistant-voice",
   "version": "1.0.1",
   "type": "module",
   "main": "dist/app.js",
@@ -53,6 +53,7 @@
   "dependencies": {
     "express": "^5.2.1",
     "pino": "^10.3.1",
+    "socket.io": "^4.8.3",
     "zod": "^4.3.6"
   }
 }
