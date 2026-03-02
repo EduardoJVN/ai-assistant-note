@@ -8,14 +8,22 @@ import { InvalidProductPriceError } from '@domain/product/errors/invalid-product
 
 class MockProductRepository implements IProductRepository {
   saved: Product[] = [];
-  async findAll(): Promise<Product[]> { return [...this.saved]; }
-  async findById(id: string): Promise<Product | null> { return this.saved.find((p) => p.id === id) ?? null; }
-  async save(entity: Product): Promise<void> { this.saved.push(entity); }
+  async findAll(): Promise<Product[]> {
+    return [...this.saved];
+  }
+  async findById(id: string): Promise<Product | null> {
+    return this.saved.find((p) => p.id === id) ?? null;
+  }
+  async save(entity: Product): Promise<void> {
+    this.saved.push(entity);
+  }
   async update(entity: Product): Promise<void> {
     const i = this.saved.findIndex((p) => p.id === entity.id);
     if (i >= 0) this.saved[i] = entity;
   }
-  async delete(id: string): Promise<void> { this.saved = this.saved.filter((p) => p.id !== id); }
+  async delete(id: string): Promise<void> {
+    this.saved = this.saved.filter((p) => p.id !== id);
+  }
 }
 
 class MockLogger implements ILogger {
@@ -45,14 +53,14 @@ describe('CreateProductUseCase', () => {
   });
 
   it('propagates InvalidProductNameError when name is invalid', async () => {
-    await expect(
-      useCase.execute({ id: 'p-1', name: '', price: 9.99 }),
-    ).rejects.toThrow(InvalidProductNameError);
+    await expect(useCase.execute({ id: 'p-1', name: '', price: 9.99 })).rejects.toThrow(
+      InvalidProductNameError,
+    );
   });
 
   it('propagates InvalidProductPriceError when price is invalid', async () => {
-    await expect(
-      useCase.execute({ id: 'p-1', name: 'Widget', price: -1 }),
-    ).rejects.toThrow(InvalidProductPriceError);
+    await expect(useCase.execute({ id: 'p-1', name: 'Widget', price: -1 })).rejects.toThrow(
+      InvalidProductPriceError,
+    );
   });
 });

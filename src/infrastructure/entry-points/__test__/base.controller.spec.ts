@@ -62,9 +62,7 @@ describe('BaseController', () => {
   });
 
   it('returns 500 for unknown errors', async () => {
-    const response = await controller.run(
-      () => Promise.reject(new Error('unexpected DB failure')),
-    );
+    const response = await controller.run(() => Promise.reject(new Error('unexpected DB failure')));
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: 'Internal server error' });

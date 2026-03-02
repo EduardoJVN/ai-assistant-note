@@ -6,15 +6,25 @@ import { Product } from '@domain/product/entities/product.entity.js';
 
 class MockProductRepository implements IProductRepository {
   private products: Product[] = [];
-  async findAll(): Promise<Product[]> { return [...this.products]; }
-  async findById(id: string): Promise<Product | null> { return this.products.find((p) => p.id === id) ?? null; }
-  async save(entity: Product): Promise<void> { this.products.push(entity); }
+  async findAll(): Promise<Product[]> {
+    return [...this.products];
+  }
+  async findById(id: string): Promise<Product | null> {
+    return this.products.find((p) => p.id === id) ?? null;
+  }
+  async save(entity: Product): Promise<void> {
+    this.products.push(entity);
+  }
   async update(entity: Product): Promise<void> {
     const i = this.products.findIndex((p) => p.id === entity.id);
     if (i >= 0) this.products[i] = entity;
   }
-  async delete(id: string): Promise<void> { this.products = this.products.filter((p) => p.id !== id); }
-  seed(product: Product): void { this.products.push(product); }
+  async delete(id: string): Promise<void> {
+    this.products = this.products.filter((p) => p.id !== id);
+  }
+  seed(product: Product): void {
+    this.products.push(product);
+  }
 }
 
 class MockLogger implements ILogger {

@@ -39,7 +39,9 @@ describe('ProductController', () => {
       const product = { id: 'p-1', name: 'Widget', price: 9.99 };
       mockCreate.execute.mockResolvedValue(product);
 
-      const response = await controller.create({ body: { id: 'p-1', name: 'Widget', price: 9.99 } });
+      const response = await controller.create({
+        body: { id: 'p-1', name: 'Widget', price: 9.99 },
+      });
 
       expect(response.status).toBe(201);
       expect(response.body).toEqual(product);
@@ -55,7 +57,9 @@ describe('ProductController', () => {
     it('returns 400 when use case throws a DomainError', async () => {
       mockCreate.execute.mockRejectedValue(new InvalidProductNameError());
 
-      const response = await controller.create({ body: { id: 'p-1', name: 'Widget', price: 9.99 } });
+      const response = await controller.create({
+        body: { id: 'p-1', name: 'Widget', price: 9.99 },
+      });
 
       expect(response.status).toBe(400);
     });

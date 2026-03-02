@@ -8,7 +8,10 @@ import { ListProductsUseCase } from '@application/product/use-cases/list-product
 import { UpdateProductUseCase } from '@application/product/use-cases/update-product.use-case.js';
 import { DeleteProductUseCase } from '@application/product/use-cases/delete-product.use-case.js';
 
-export function createProductModule(logger: ILogger, errorReporter: IErrorReporter): ProductController {
+export function createProductModule(
+  logger: ILogger,
+  errorReporter: IErrorReporter,
+): ProductController {
   const repo = new InMemoryProductAdapter();
 
   return new ProductController(
