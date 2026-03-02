@@ -1,0 +1,50 @@
+# --- Dependencias ---
+node_modules/
+.pnp
+.pnp.js
+
+# --- Compilación y Output ---
+dist/
+build/
+*.tsbuildinfo
+
+# --- Variables de Entorno (SEGURIDAD) ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# --- Logs ---
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pino-*.log
+
+# --- Testing y Cobertura ---
+coverage/
+*.lcov
+.nyc_output
+.vitest.result.json
+
+# --- IDEs / Editores ---
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# --- Docker ---
+.docker-build/
+
+# --- Otros ---
+temp/
+tmp/
+.eslintcache
+.stylelintcache
