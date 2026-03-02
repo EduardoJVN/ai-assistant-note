@@ -618,7 +618,12 @@ class MockLogger implements ILogger {
 
 ## Validation
 
-**Zod belongs ONLY in infrastructure/entry-points.** Never in domain or application.
+**Zod is allowed in two places only — never in domain or application:**
+
+| Location | Purpose |
+|---|---|
+| `infrastructure/entry-points/` | HTTP request body validation in controllers |
+| `infrastructure/config/env.config.ts` | Environment variable validation at startup |
 
 Always use `safeParse` (not `parse`) in controllers — it returns `{ success, data, error }` instead of throwing, which lets you return a structured 400 without hitting the `handleRequest` catch block.
 
