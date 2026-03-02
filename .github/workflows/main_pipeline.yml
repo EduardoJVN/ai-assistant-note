@@ -1,0 +1,69 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [develop, qa, main]
+  create: 
+
+jobs:
+  quality-check:
+    name: 🔍 Calidad (Lint & Test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'yarn'
+      - name: 📦 Install
+        run: yarn install --frozen-lockfile
+      - name: 🔍 Lint & Test
+        run: |
+          yarn lint
+          yarn test
+
+  build-check:
+    name: 🏗️ Build Verification
+    needs: quality-check
+    runs-on: ubuntu-latest
+    # Ejecutar si es una rama principal, un PR hacia ellas, o la creación de un Tag
+    if: |
+      contains(fromJSON('["refs/heads/main", "refs/heads/develop", "refs/heads/qa"]'), github.ref) ||
+      github.event_name == 'pull_request' ||
+      github.event.ref_type == 'tag'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'yarn'
+      - name: 📦 Install
+        run: yarn install --frozen-lockfile
+      - name: 🏗️ Build
+        run: yarn build
+
+  deploy:
+    name: 🚀 Deploy
+    needs: build-check
+    runs-on: ubuntu-latest
+    # Solo despliega en PUSH a dev/qa O cuando se crea un TAG (PROD)
+    if: |
+      (github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/qa')) ||
+      (github.event_name == 'create' && github.event.ref_type == 'tag')
+    
+    steps:
+      - name: 🚀 Deploy to DEV
+        if: github.ref == 'refs/heads/develop'
+        run: echo "Desplegando en DEV..."
+
+      - name: 🧪 Deploy to QA
+        if: github.ref == 'refs/heads/qa'
+        run: echo "Desplegando en QA..."
+
+      - name: 🏁 Deploy to PROD
+        if: github.event.ref_type == 'tag'
+        run: |
+          echo "🚀 DESPLIEGUE OFICIAL DE PRODUCCIÓN"
+          echo "Tag detectado: ${{ github.event.ref }}"

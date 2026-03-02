@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "lib": ["ES2024"],
+    "skipLibCheck": true,
+    "outDir": "./dist",
+    /* 1. Cambiamos rootDir a la raíz para incluir configs */
+    "rootDir": "./",
+
+    /* Strictness */
+    "strict": true,
+    "noImplicitAny": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "esModuleInterop": true,
+
+    /* Path Aliasing - Ajustados a la nueva raíz */
+    "baseUrl": ".",
+    "paths": {
+      "@domain/*": ["src/domain/*"],
+    "@application/*": ["src/application/*"],
+    "@infra/*": ["src/infrastructure/*"],
+    "@shared/*": ["src/shared/*"]
+    }
+  },
+  "include": ["src/**/*", "tests/**/*", "eslint.config.js", "vitest.config.ts", "scripts/**/*.js","commitlint.config.cjs"],
+  "exclude": ["node_modules", "dist"]
+}
