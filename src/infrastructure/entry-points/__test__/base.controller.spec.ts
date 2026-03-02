@@ -1,8 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BaseController } from '@infra/entry-points/base.controller.js';
 import type { HttpResponse, ErrorResponse } from '@infra/entry-points/base.controller.js';
+import type { IErrorReporter } from '@domain/ports/error-reporter.port.js';
 import { DomainError } from '@shared/errors/domain.error.js';
 import { NotFoundError } from '@shared/errors/not-found.error.js';
+
+class MockErrorReporter implements IErrorReporter {
+  report = vi.fn();
+}
 
 class TestNotFoundError extends NotFoundError {
   constructor() {
@@ -27,10 +32,12 @@ class TestController extends BaseController {
 }
 
 describe('BaseController', () => {
+  let reporter: MockErrorReporter;
   let controller: TestController;
 
   beforeEach(() => {
-    controller = new TestController();
+    reporter = new MockErrorReporter();
+    controller = new TestController(reporter);
   });
 
   it('returns 200 with result on happy path', async () => {
@@ -61,5 +68,21 @@ describe('BaseController', () => {
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: 'Internal server error' });
+  });
+
+  it('does not report expected domain errors (400, 404)', async () => {
+    await controller.run(() => Promise.reject(new TestNotFoundError()));
+    await controller.run(() => Promise.reject(new TestDomainError()));
+
+    expect(reporter.report).not.toHaveBeenCalled();
+  });
+
+  it('reports unexpected errors to IErrorReporter', async () => {
+    const boom = new Error('unexpected DB failure');
+
+    await controller.run(() => Promise.reject(boom));
+
+    expect(reporter.report).toHaveBeenCalledOnce();
+    expect(reporter.report).toHaveBeenCalledWith(boom, { type: 'unhandled-controller-error' });
   });
 });

@@ -49,7 +49,13 @@ src/
 │       └── dto/
 ├── infrastructure/
 │   ├── adapters/          # DB, email, logger implementations
-│   ├── entry-points/      # HTTP controllers (BaseController lives here)
+│   ├── entry-points/      # HTTP controllers, routes, Express adapter
+│   │   ├── express-adapter.ts   # toExpressHandler — shared by all route files
+│   │   ├── router.ts            # Central route registry (registerRoutes)
+│   │   ├── {module}.routes.ts   # Route definitions per module
+│   │   └── {module}.controller.ts
+│   ├── modules/           # Module factories — wire adapters + use cases + controller
+│   │   └── {module}.module.ts   # createXModule(logger): XController
 │   └── config/            # env vars, bootstrap helpers
 ├── shared/
 │   └── errors/            # DomainError, NotFoundError base classes
@@ -420,6 +426,159 @@ export class {Module}Controller extends BaseController {
 
 `BaseController` lives in `src/infrastructure/entry-points/`. Swapping to Lambda means overriding only the `onSuccess`/`onError` callbacks — error classification logic stays in one place.
 
+## Express & HTTP Layer
+
+**Framework:** Express 5 (`express@^5`). Express 5 handles async errors natively — rejected promises in route handlers are forwarded automatically to error middleware.
+
+### File responsibilities
+
+| File | Responsibility |
+|---|---|
+| `express-adapter.ts` | `toExpressHandler` — translates `HttpRequest/HttpResponse` ↔ Express `req/res`. One file, shared by all route files. |
+| `{module}.routes.ts` | Route definitions for one module. Imports `toExpressHandler`. Exports `createXRouter(controller)`. |
+| `router.ts` | Central registry. Mounts all module routers. Exports `registerRoutes(controllers)` and `AppControllers` interface. |
+| `modules/{module}.module.ts` | Module factory. Instantiates adapter + use cases + controller. Exports `createXModule(logger)`. |
+
+### Adding a new module — checklist
+
+```
+1. src/infrastructure/modules/{module}.module.ts   ← createXModule(logger): XController
+2. src/infrastructure/entry-points/{module}.routes.ts  ← createXRouter(controller): Router
+3. router.ts → add router.use('/{modules}', createXRouter(controllers.x))
+4. router.ts → extend AppControllers interface
+5. app.ts → pass createXModule(logger) to registerRoutes({ ..., x: createXModule(logger) })
+```
+
+`app.ts` changes only in step 5 — one new key in the object literal.
+
+### toExpressHandler
+
+Bridges the framework-agnostic controller contract to Express. Controllers return `{ status, body }` — never touch `res` directly.
+
+```typescript
+// src/infrastructure/entry-points/express-adapter.ts
+export function toExpressHandler(
+  handler: (req: HttpRequest) => Promise<{ status: number; body: unknown }>,
+) {
+  return async (req: Request, res: Response): Promise<void> => {
+    const httpReq: HttpRequest = {
+      body: req.body as unknown,
+      params: req.params,
+      query: req.query as Record<string, string>,
+    };
+    const result = await handler(httpReq);
+    if (result.body === null) {
+      res.status(result.status).end();       // 204 No Content — no body
+    } else {
+      res.status(result.status).json(result.body);
+    }
+  };
+}
+```
+
+### router.ts — central registry
+
+One entry per module. `AppControllers` is the single place that declares which modules exist. **Never add product-specific or module-specific logic here — only wiring.**
+
+```typescript
+// src/infrastructure/entry-points/router.ts
+import { Router } from 'express';
+import type { {ModuleA}Controller } from '@infra/entry-points/{module-a}.controller.js';
+import type { {ModuleB}Controller } from '@infra/entry-points/{module-b}.controller.js';
+import { create{ModuleA}Router } from '@infra/entry-points/{module-a}.routes.js';
+import { create{ModuleB}Router } from '@infra/entry-points/{module-b}.routes.js';
+
+// Extend this interface every time a new module is added — one key per module
+export interface AppControllers {
+  {moduleA}: {ModuleA}Controller;
+  {moduleB}: {ModuleB}Controller;
+}
+
+export function registerRoutes(controllers: AppControllers): Router {
+  const router = Router();
+
+  // One line per module: router.use('/{plural-path}', createXRouter(controllers.x))
+  router.use('/{module-a-plural}', create{ModuleA}Router(controllers.{moduleA}));
+  router.use('/{module-b-plural}', create{ModuleB}Router(controllers.{moduleB}));
+
+  return router;
+}
+```
+
+### Module factory
+
+Encapsulates all internal wiring for one module. Accepts only shared dependencies (`ILogger`, DB connection, etc.). Returns the controller ready to inject into `registerRoutes`.
+
+```typescript
+// src/infrastructure/modules/{module}.module.ts
+import type { ILogger } from '@domain/ports/logger.port.js';
+import { {Module}Controller } from '@infra/entry-points/{module}.controller.js';
+import { InMemory{Module}Adapter } from '@infra/adapters/in-memory-{module}.adapter.js';
+import { Create{Module}UseCase } from '@application/{module}/use-cases/create-{module}.use-case.js';
+import { Get{Module}UseCase } from '@application/{module}/use-cases/get-{module}.use-case.js';
+import { List{Module}sUseCase } from '@application/{module}/use-cases/list-{module}s.use-case.js';
+import { Update{Module}UseCase } from '@application/{module}/use-cases/update-{module}.use-case.js';
+import { Delete{Module}UseCase } from '@application/{module}/use-cases/delete-{module}.use-case.js';
+
+export function create{Module}Module(logger: ILogger): {Module}Controller {
+  const repo = new InMemory{Module}Adapter();
+
+  return new {Module}Controller(
+    new Create{Module}UseCase(repo, logger),
+    new Get{Module}UseCase(repo, logger),
+    new List{Module}sUseCase(repo, logger),
+    new Update{Module}UseCase(repo, logger),
+    new Delete{Module}UseCase(repo, logger),
+  );
+}
+```
+
+### app.ts — shape after wiring
+
+`app.ts` only orchestrates. It does not know about routes, use cases, or adapters internally. The **404 and global error handler are mandatory** and must come after `registerRoutes` — order matters in Express.
+
+```typescript
+// src/app.ts
+async function bootstrap() {
+  const logger = new Logger();
+
+  const app = express();
+  app.use(express.json());
+
+  // One key per module — add here when a new module is created
+  app.use(
+    registerRoutes({
+      {moduleA}: create{ModuleA}Module(logger),
+      {moduleB}: create{ModuleB}Module(logger),
+    }),
+  );
+
+  // 404 — catches any path not matched by registerRoutes
+  app.use((_req: Request, res: Response) => {
+    res.status(404).json({ error: 'Not found' });
+  });
+
+  // Global error handler — Express 5 forwards unhandled async errors here automatically
+  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+    logger.error('Unhandled error', { message: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  });
+
+  app.listen(ENV.PORT, () => {
+    reportBootstrap(logger);
+  });
+}
+```
+
+### Rules
+
+- `toExpressHandler` is the only place that touches `req` and `res` directly. Controllers never import from `express`.
+- `req.query` is `ParsedQs` in Express — always cast to `Record<string, string>` in `toExpressHandler`. Never cast inside controllers.
+- Module factory files (`modules/*.module.ts`) have no logic to test — they are pure wiring. No spec required.
+- Route files (`*.routes.ts`) have no logic to test — they delegate entirely to the controller. No spec required.
+
+---
+
 ## ILogger
 
 `ILogger` is a cross-module port defined at `src/domain/ports/logger.port.ts`. All use cases receive it via constructor injection — **never** import Pino or any logging lib directly in domain or application.
@@ -459,7 +618,12 @@ class MockLogger implements ILogger {
 
 ## Validation
 
-**Zod belongs ONLY in infrastructure/entry-points.** Never in domain or application.
+**Zod is allowed in two places only — never in domain or application:**
+
+| Location | Purpose |
+|---|---|
+| `infrastructure/entry-points/` | HTTP request body validation in controllers |
+| `infrastructure/config/env.config.ts` | Environment variable validation at startup |
 
 Always use `safeParse` (not `parse`) in controllers — it returns `{ success, data, error }` instead of throwing, which lets you return a structured 400 without hitting the `handleRequest` catch block.
 
