@@ -1,5 +1,6 @@
 import { DomainError } from '@shared/errors/domain.error.js';
 import { NotFoundError } from '@shared/errors/not-found.error.js';
+import type { IErrorReporter } from '@domain/ports/error-reporter.port.js';
 
 export interface HttpRequest {
   body?: unknown;
@@ -18,6 +19,8 @@ export interface ErrorResponse {
 }
 
 export abstract class BaseController {
+  constructor(private readonly errorReporter: IErrorReporter) {}
+
   protected async handleRequest<T>(
     action: () => Promise<T>,
     onSuccess: (result: T) => HttpResponse,
@@ -32,6 +35,8 @@ export abstract class BaseController {
       } else if (error instanceof DomainError) {
         return onError({ status: 400, message: error.message });
       } else {
+        const err = error instanceof Error ? error : new Error(String(error));
+        this.errorReporter.report(err, { type: 'unhandled-controller-error' });
         return onError({ status: 500, message: 'Internal server error' });
       }
     }

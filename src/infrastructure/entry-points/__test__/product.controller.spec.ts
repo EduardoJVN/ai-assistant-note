@@ -2,11 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ProductController } from '../product.controller.js';
 import { ProductNotFoundError } from '@domain/product/errors/product-not-found.error.js';
 import { InvalidProductNameError } from '@domain/product/errors/invalid-product-name.error.js';
+import type { IErrorReporter } from '@domain/ports/error-reporter.port.js';
 import type { CreateProductUseCase } from '@application/product/use-cases/create-product.use-case.js';
 import type { GetProductUseCase } from '@application/product/use-cases/get-product.use-case.js';
 import type { ListProductsUseCase } from '@application/product/use-cases/list-products.use-case.js';
 import type { UpdateProductUseCase } from '@application/product/use-cases/update-product.use-case.js';
 import type { DeleteProductUseCase } from '@application/product/use-cases/delete-product.use-case.js';
+
+class MockErrorReporter implements IErrorReporter {
+  report = vi.fn();
+}
 
 const mockCreate = { execute: vi.fn() };
 const mockGet = { execute: vi.fn() };
@@ -20,6 +25,7 @@ describe('ProductController', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     controller = new ProductController(
+      new MockErrorReporter(),
       mockCreate as unknown as CreateProductUseCase,
       mockGet as unknown as GetProductUseCase,
       mockList as unknown as ListProductsUseCase,

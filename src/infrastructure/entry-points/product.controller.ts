@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { BaseController } from './base.controller.js';
 import type { HttpRequest, HttpResponse } from './base.controller.js';
+import type { IErrorReporter } from '@domain/ports/error-reporter.port.js';
 import type { CreateProductUseCase } from '@application/product/use-cases/create-product.use-case.js';
 import type { GetProductUseCase } from '@application/product/use-cases/get-product.use-case.js';
 import type { ListProductsUseCase } from '@application/product/use-cases/list-products.use-case.js';
@@ -20,13 +21,14 @@ const UpdateProductBodySchema = z.object({
 
 export class ProductController extends BaseController {
   constructor(
+    errorReporter: IErrorReporter,
     private readonly createUseCase: CreateProductUseCase,
     private readonly getUseCase: GetProductUseCase,
     private readonly listUseCase: ListProductsUseCase,
     private readonly updateUseCase: UpdateProductUseCase,
     private readonly deleteUseCase: DeleteProductUseCase,
   ) {
-    super();
+    super(errorReporter);
   }
 
   async create(req: HttpRequest): Promise<HttpResponse> {
