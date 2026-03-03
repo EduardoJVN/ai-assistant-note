@@ -11,6 +11,9 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   HOST: z.string().min(1).default('localhost'),
   DEEPGRAM_API_KEY: z.string().min(1),
+  // ── Voice Agent mode (default) or legacy pipeline ─────────────────────────
+  AGENT_MODE: z.enum(['voice-agent', 'pipeline']).default('voice-agent'),
+  // ── Pipeline-only settings ─────────────────────────────────────────────────
   RESPONSE_MODE: z.enum(['text', 'voice']).default('text'),
   AI_PROVIDER: z.enum(['anthropic', 'gemini']).default('anthropic'),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
@@ -28,18 +31,21 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-const { AI_PROVIDER, ANTHROPIC_API_KEY, GEMINI_API_KEY } = parsed.data;
+const { AGENT_MODE, AI_PROVIDER, ANTHROPIC_API_KEY, GEMINI_API_KEY } = parsed.data;
 
-if (AI_PROVIDER === 'anthropic' && !ANTHROPIC_API_KEY) {
-  console.error('Missing required environment variable: ANTHROPIC_API_KEY');
-  console.error('Set ANTHROPIC_API_KEY when AI_PROVIDER=anthropic.');
-  process.exit(1);
-}
+// LLM keys are only required in pipeline mode
+if (AGENT_MODE === 'pipeline') {
+  if (AI_PROVIDER === 'anthropic' && !ANTHROPIC_API_KEY) {
+    console.error('Missing required environment variable: ANTHROPIC_API_KEY');
+    console.error('Set ANTHROPIC_API_KEY when AI_PROVIDER=anthropic.');
+    process.exit(1);
+  }
 
-if (AI_PROVIDER === 'gemini' && !GEMINI_API_KEY) {
-  console.error('Missing required environment variable: GEMINI_API_KEY');
-  console.error('Set GEMINI_API_KEY when AI_PROVIDER=gemini.');
-  process.exit(1);
+  if (AI_PROVIDER === 'gemini' && !GEMINI_API_KEY) {
+    console.error('Missing required environment variable: GEMINI_API_KEY');
+    console.error('Set GEMINI_API_KEY when AI_PROVIDER=gemini.');
+    process.exit(1);
+  }
 }
 
 export const ENV = {
