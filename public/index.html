@@ -3,216 +3,283 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Audio Stream</title>
+    <title>AI Assistant</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
+      /* Orb blob animations */
+      @keyframes blob-1 {
+        0%, 100% { transform: translate(10%, 15%) scale(1); }
+        50%       { transform: translate(-8%, -12%) scale(1.15); }
+      }
+      @keyframes blob-2 {
+        0%, 100% { transform: translate(-12%, -10%) scale(1); }
+        50%       { transform: translate(10%, 12%) scale(0.88); }
+      }
+      @keyframes blob-3 {
+        0%, 100% { transform: translate(-10%, 12%) scale(0.95); }
+        50%       { transform: translate(12%, -10%) scale(1.1); }
+      }
+      @keyframes orb-breathe {
+        0%, 100% { transform: scale(1); }
+        50%       { transform: scale(1.04); }
+      }
+      @keyframes glow-idle {
+        0%, 100% { opacity: 0.2; }
+        50%       { opacity: 0.35; }
       }
 
-      body {
-        font-family: system-ui, sans-serif;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        min-height: 100vh;
-        background: #0f0f0f;
-        color: #f0f0f0;
-        gap: 24px;
-      }
+      /* Idle state */
+      #orb-wrapper { animation: orb-breathe 4s ease-in-out infinite; }
+      #orb-glow    { animation: glow-idle 4s ease-in-out infinite; }
+      #blob-1 { animation: blob-1 7s ease-in-out infinite; }
+      #blob-2 { animation: blob-2 8s ease-in-out infinite; }
+      #blob-3 { animation: blob-3 6s ease-in-out infinite; }
 
-      h1 {
-        font-size: 1.4rem;
-        font-weight: 600;
-        letter-spacing: 0.05em;
-        color: #a0a0a0;
-      }
+      /* Recording state — override animation durations only; scale driven by JS */
+      #orb-wrapper.recording #blob-1 { animation-duration: 2.5s; }
+      #orb-wrapper.recording #blob-2 { animation-duration: 3s; }
+      #orb-wrapper.recording #blob-3 { animation-duration: 2s; }
+      #orb-wrapper.recording #orb-glow { animation-duration: 1.5s; }
 
-      #status {
-        font-size: 0.85rem;
-        padding: 6px 14px;
-        border-radius: 999px;
-        background: #1e1e1e;
-        border: 1px solid #333;
-        color: #888;
-        transition: all 0.2s;
-      }
-
-      #status.connected {
-        border-color: #22c55e;
-        color: #22c55e;
-      }
-
-      #status.recording {
-        border-color: #ef4444;
-        color: #ef4444;
-        animation: pulse 1.2s ease-in-out infinite;
-      }
-
-      #status.error {
-        border-color: #f59e0b;
-        color: #f59e0b;
-      }
-
-      @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-
-      .controls {
-        display: flex;
-        gap: 12px;
-      }
-
-      button {
-        padding: 10px 28px;
-        border-radius: 8px;
-        border: none;
-        font-size: 0.9rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: opacity 0.2s, transform 0.1s;
-      }
-
-      button:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
-      }
-
-      button:not(:disabled):active {
-        transform: scale(0.97);
-      }
-
-      #start {
-        background: #22c55e;
-        color: #000;
-      }
-
-      #stop {
-        background: #ef4444;
-        color: #fff;
-      }
-
-      #log {
-        width: 380px;
-        max-height: 180px;
-        overflow-y: auto;
-        font-size: 0.75rem;
-        font-family: monospace;
-        background: #1a1a1a;
-        border: 1px solid #2a2a2a;
-        border-radius: 8px;
-        padding: 10px 12px;
-        color: #666;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      #log .entry { color: #888; }
-      #log .entry.ok { color: #22c55e; }
-      #log .entry.err { color: #ef4444; }
+      /* Transcript panel scrollbar */
+      #transcript-panel::-webkit-scrollbar { width: 4px; }
+      #transcript-panel::-webkit-scrollbar-track { background: transparent; }
+      #transcript-panel::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 2px; }
     </style>
   </head>
-  <body>
-    <h1>Audio Stream</h1>
 
-    <span id="status">Desconectado</span>
+  <body class="min-h-screen bg-zinc-950 text-white flex flex-col items-center">
 
-    <div class="controls">
-      <button id="start">Iniciar</button>
-      <button id="stop" disabled>Detener</button>
+    <!-- ── Header ───────────────────────────────────────────── -->
+    <header class="flex flex-col items-center gap-3 pt-10 pb-4">
+      <p class="text-xs font-semibold tracking-widest uppercase text-zinc-600">AI Assistant</p>
+      <span id="status"
+        class="text-xs px-3 py-1 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-500 transition-colors duration-300">
+        Desconectado
+      </span>
+    </header>
+
+    <!-- ── Orb ──────────────────────────────────────────────── -->
+    <main class="flex flex-1 items-center justify-center w-full py-6">
+      <div id="orb-wrapper" class="relative w-52 h-52 select-none">
+
+        <!-- Outer glow (audio-reactive via JS opacity) -->
+        <div id="orb-glow"
+          class="absolute -inset-10 rounded-full bg-indigo-500 blur-3xl pointer-events-none">
+        </div>
+
+        <!-- Orb core -->
+        <div class="relative w-full h-full rounded-full overflow-hidden shadow-2xl">
+          <!-- Base gradient -->
+          <div class="absolute inset-0 bg-gradient-to-br from-indigo-700 via-violet-700 to-purple-800"></div>
+
+          <!-- Blob 1 — blue -->
+          <div id="blob-1"
+            class="absolute w-4/5 h-4/5 -top-1/4 -left-1/4 rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 opacity-60 blur-2xl">
+          </div>
+
+          <!-- Blob 2 — purple/pink -->
+          <div id="blob-2"
+            class="absolute w-3/4 h-3/4 top-1/4 left-1/4 rounded-full bg-gradient-to-tl from-fuchsia-400 to-violet-500 opacity-50 blur-2xl">
+          </div>
+
+          <!-- Blob 3 — teal -->
+          <div id="blob-3"
+            class="absolute w-1/2 h-1/2 -bottom-1/4 -right-1/4 rounded-full bg-gradient-to-tl from-teal-400 to-cyan-400 opacity-55 blur-xl">
+          </div>
+
+          <!-- Specular highlight -->
+          <div class="absolute top-5 left-9 w-12 h-7 rounded-full bg-white opacity-20 blur-md -rotate-12 pointer-events-none"></div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- ── Controls ─────────────────────────────────────────── -->
+    <div class="flex gap-3 pb-6">
+      <button id="start"
+        class="px-7 py-2.5 rounded-full bg-white text-zinc-900 text-sm font-semibold transition-all hover:bg-zinc-100 active:scale-95">
+        Iniciar
+      </button>
+      <button id="stop" disabled
+        class="px-7 py-2.5 rounded-full text-sm font-semibold transition-all border border-zinc-700 bg-zinc-900 text-zinc-500 cursor-not-allowed opacity-50">
+        Detener
+      </button>
     </div>
 
-    <div id="log"></div>
+    <!-- ── Transcription panel ──────────────────────────────── -->
+    <footer class="w-full max-w-xl px-6 pb-10">
+      <div class="mb-2 flex items-center gap-2">
+        <div id="rec-dot" class="w-1.5 h-1.5 rounded-full bg-zinc-700 transition-colors duration-300"></div>
+        <span class="text-xs text-zinc-600 font-medium tracking-wide uppercase">Transcripción</span>
+      </div>
+      <div id="transcript-panel"
+        class="w-full h-40 rounded-2xl bg-zinc-900 border border-zinc-800 px-5 py-4 overflow-y-auto flex flex-col gap-1.5">
+        <p id="placeholder" class="text-zinc-600 text-sm text-center m-auto">
+          La transcripción aparecerá aquí…
+        </p>
+      </div>
+    </footer>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-      const statusEl = document.getElementById('status');
-      const startBtn = document.getElementById('start');
-      const stopBtn = document.getElementById('stop');
-      const logEl = document.getElementById('log');
+      // ── Elements ──────────────────────────────────────────
+      const statusEl      = document.getElementById('status');
+      const startBtn      = document.getElementById('start');
+      const stopBtn       = document.getElementById('stop');
+      const orbWrapper    = document.getElementById('orb-wrapper');
+      const orbGlow       = document.getElementById('orb-glow');
+      const transcriptEl  = document.getElementById('transcript-panel');
+      const placeholder   = document.getElementById('placeholder');
+      const recDot        = document.getElementById('rec-dot');
 
-      let mediaRecorder = null;
-      let stream = null;
-      let chunkCount = 0;
+      // ── State ─────────────────────────────────────────────
+      let mediaRecorder   = null;
+      let stream          = null;
+      let audioContext    = null;
+      let analyser        = null;
+      let animationId     = null;
+      const finals        = [];   // confirmed transcript segments
+      let interim         = '';   // current interim
 
-      function log(msg, type = '') {
-        const el = document.createElement('div');
-        el.className = `entry ${type}`;
-        el.textContent = `${new Date().toLocaleTimeString()} ${msg}`;
-        logEl.prepend(el);
+      // ── Audio-reactive orb ────────────────────────────────
+      function startAudioAnalysis(src) {
+        audioContext = new AudioContext();
+        analyser     = audioContext.createAnalyser();
+        analyser.fftSize = 32;
+        audioContext.createMediaStreamSource(src).connect(analyser);
+
+        const buf = new Uint8Array(analyser.frequencyBinCount);
+
+        function tick() {
+          analyser.getByteFrequencyData(buf);
+          const avg   = buf.reduce((s, v) => s + v, 0) / buf.length;
+          const level = Math.min(avg / 90, 1);          // 0–1
+
+          orbWrapper.style.transform = `scale(${1 + level * 0.38})`;
+          orbGlow.style.opacity      = (0.2 + level * 0.55).toFixed(2);
+
+          animationId = requestAnimationFrame(tick);
+        }
+        tick();
       }
 
-      // ── Socket.io ──────────────────────────────────────────────
+      function stopAudioAnalysis() {
+        if (animationId)   { cancelAnimationFrame(animationId); animationId = null; }
+        if (audioContext)  { audioContext.close(); audioContext = null; }
+        orbWrapper.style.transform = '';
+        orbGlow.style.opacity      = '';
+      }
+
+      // ── Transcript rendering ──────────────────────────────
+      function renderTranscripts() {
+        placeholder.remove();
+
+        // Rebuild children
+        transcriptEl.innerHTML = '';
+        finals.forEach((text) => {
+          const p = document.createElement('p');
+          p.className = 'text-white text-sm leading-relaxed';
+          p.textContent = text;
+          transcriptEl.appendChild(p);
+        });
+
+        if (interim) {
+          const p = document.createElement('p');
+          p.className = 'text-zinc-400 text-sm leading-relaxed';
+          p.textContent = interim + '…';
+          transcriptEl.appendChild(p);
+        }
+
+        transcriptEl.scrollTop = transcriptEl.scrollHeight;
+      }
+
+      // ── Status helpers ───────────────────────────────────
+      function setStatus(text, colorClass) {
+        statusEl.textContent = text;
+        statusEl.className =
+          `text-xs px-3 py-1 rounded-full border transition-colors duration-300 ${colorClass}`;
+      }
+
+      function setRecording(active) {
+        orbWrapper.classList.toggle('recording', active);
+        recDot.className = active
+          ? 'w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse transition-colors duration-300'
+          : 'w-1.5 h-1.5 rounded-full bg-zinc-700 transition-colors duration-300';
+      }
+
+      // ── Socket.io ─────────────────────────────────────────
       const socket = io();
 
       socket.on('connect', () => {
-        statusEl.textContent = 'Conectado';
-        statusEl.className = 'connected';
-        log(`Conectado — ${socket.id}`, 'ok');
+        setStatus('Conectado', 'border-emerald-500/40 bg-emerald-950/30 text-emerald-400');
       });
 
-      socket.on('disconnect', (reason) => {
-        statusEl.textContent = 'Desconectado';
-        statusEl.className = '';
-        log(`Desconectado — ${reason}`, 'err');
+      socket.on('disconnect', () => {
+        setStatus('Desconectado', 'border-zinc-700 bg-zinc-900 text-zinc-500');
+        setRecording(false);
+        stopAudioAnalysis();
       });
 
-      socket.on('audio-stream:error', (error) => {
-        log(`Error del servidor: ${JSON.stringify(error)}`, 'err');
+      socket.on('audio-stream:error', (err) => {
+        setStatus('Error del servidor', 'border-amber-500/40 bg-amber-950/30 text-amber-400');
+        console.error('audio-stream:error', err);
       });
 
       socket.on('transcription', ({ transcript, isFinal }) => {
-        log(`${isFinal ? '✓' : '…'} ${transcript}`, isFinal ? 'ok' : '');
+        if (isFinal) {
+          if (transcript.trim()) finals.push(transcript.trim());
+          if (finals.length > 10) finals.shift();
+          interim = '';
+        } else {
+          interim = transcript;
+        }
+        renderTranscripts();
       });
 
-      // ── Controles ──────────────────────────────────────────────
+      // ── Controls ──────────────────────────────────────────
       startBtn.addEventListener('click', async () => {
         try {
           stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
           mediaRecorder = new MediaRecorder(stream);
-          chunkCount = 0;
 
-          mediaRecorder.addEventListener('dataavailable', (event) => {
-            if (event.data.size > 0 && socket.connected) {
-              socket.emit('audio-stream', event.data);
-              chunkCount++;
-              log(`Chunk #${chunkCount} enviado — ${event.data.size} bytes`);
+          mediaRecorder.addEventListener('dataavailable', (e) => {
+            if (e.data.size > 0 && socket.connected) {
+              socket.emit('audio-stream', e.data);
             }
           });
 
-          mediaRecorder.start(250); // chunk cada 250ms
+          mediaRecorder.start(250);
+
+          startAudioAnalysis(stream);
+          setRecording(true);
+          setStatus('Escuchando', 'border-indigo-500/40 bg-indigo-950/30 text-indigo-400');
 
           startBtn.disabled = true;
-          stopBtn.disabled = false;
-          statusEl.textContent = 'Grabando';
-          statusEl.className = 'recording';
-          log('Grabación iniciada', 'ok');
+          startBtn.classList.add('opacity-40', 'cursor-not-allowed');
+          stopBtn.disabled  = false;
+          stopBtn.className =
+            'px-7 py-2.5 rounded-full text-sm font-semibold transition-all bg-red-500 text-white hover:bg-red-600 active:scale-95';
         } catch (err) {
-          statusEl.textContent = 'Error';
-          statusEl.className = 'error';
-          log(`Micrófono: ${err.message}`, 'err');
+          setStatus('Sin micrófono', 'border-amber-500/40 bg-amber-950/30 text-amber-400');
+          console.error(err);
         }
       });
 
       stopBtn.addEventListener('click', () => {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-          mediaRecorder.stop();
-        }
-        if (stream) {
-          stream.getTracks().forEach((track) => track.stop());
-        }
+        if (mediaRecorder?.state !== 'inactive') mediaRecorder.stop();
+        stream?.getTracks().forEach((t) => t.stop());
+
+        stopAudioAnalysis();
+        setRecording(false);
+        setStatus('Conectado', 'border-emerald-500/40 bg-emerald-950/30 text-emerald-400');
 
         startBtn.disabled = false;
-        stopBtn.disabled = true;
-        statusEl.textContent = 'Conectado';
-        statusEl.className = 'connected';
-        log(`Grabación detenida — ${chunkCount} chunks enviados`, 'ok');
-        chunkCount = 0;
+        startBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+        stopBtn.disabled  = true;
+        stopBtn.className =
+          'px-7 py-2.5 rounded-full text-sm font-semibold transition-all border border-zinc-700 bg-zinc-900 text-zinc-500 cursor-not-allowed opacity-50';
       });
     </script>
   </body>
