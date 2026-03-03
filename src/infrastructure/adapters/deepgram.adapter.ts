@@ -26,7 +26,6 @@ class DeepgramSession implements ITranscriptionSession {
       model: 'nova-2',
       language: 'es',
       smart_format: true,
-      encoding: 'webm-opus',
     });
 
     this.connection.on(LiveTranscriptionEvents.Open, () => {
