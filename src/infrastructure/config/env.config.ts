@@ -11,6 +11,10 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   HOST: z.string().min(1).default('localhost'),
   DEEPGRAM_API_KEY: z.string().min(1),
+  RESPONSE_MODE: z.enum(['text', 'voice']).default('text'),
+  AI_PROVIDER: z.enum(['anthropic', 'gemini']).default('anthropic'),
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  GEMINI_API_KEY: z.string().min(1).optional(),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
@@ -21,6 +25,20 @@ if (!parsed.success) {
     console.error(`  ${issue.path.join('.')}: ${issue.message}`);
   });
   console.error('\nCheck your .env file against .env.example');
+  process.exit(1);
+}
+
+const { AI_PROVIDER, ANTHROPIC_API_KEY, GEMINI_API_KEY } = parsed.data;
+
+if (AI_PROVIDER === 'anthropic' && !ANTHROPIC_API_KEY) {
+  console.error('Missing required environment variable: ANTHROPIC_API_KEY');
+  console.error('Set ANTHROPIC_API_KEY when AI_PROVIDER=anthropic.');
+  process.exit(1);
+}
+
+if (AI_PROVIDER === 'gemini' && !GEMINI_API_KEY) {
+  console.error('Missing required environment variable: GEMINI_API_KEY');
+  console.error('Set GEMINI_API_KEY when AI_PROVIDER=gemini.');
   process.exit(1);
 }
 

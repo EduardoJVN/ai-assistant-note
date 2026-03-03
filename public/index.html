@@ -45,6 +45,11 @@
       #transcript-panel::-webkit-scrollbar { width: 4px; }
       #transcript-panel::-webkit-scrollbar-track { background: transparent; }
       #transcript-panel::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 2px; }
+
+      /* Assistant panel scrollbar */
+      #assistant-panel::-webkit-scrollbar { width: 4px; }
+      #assistant-panel::-webkit-scrollbar-track { background: transparent; }
+      #assistant-panel::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 2px; }
     </style>
   </head>
 
@@ -107,31 +112,52 @@
       </button>
     </div>
 
-    <!-- ── Transcription panel ──────────────────────────────── -->
-    <footer class="w-full max-w-xl px-6 pb-10">
-      <div class="mb-2 flex items-center gap-2">
-        <div id="rec-dot" class="w-1.5 h-1.5 rounded-full bg-zinc-700 transition-colors duration-300"></div>
-        <span class="text-xs text-zinc-600 font-medium tracking-wide uppercase">Transcripción</span>
+    <!-- ── Panels ───────────────────────────────────────────── -->
+    <footer class="w-full max-w-xl px-6 pb-10 flex flex-col gap-6">
+
+      <!-- Transcription panel -->
+      <div>
+        <div class="mb-2 flex items-center gap-2">
+          <div id="rec-dot" class="w-1.5 h-1.5 rounded-full bg-zinc-700 transition-colors duration-300"></div>
+          <span class="text-xs text-zinc-600 font-medium tracking-wide uppercase">Transcripción</span>
+        </div>
+        <div id="transcript-panel"
+          class="w-full h-40 rounded-2xl bg-zinc-900 border border-zinc-800 px-5 py-4 overflow-y-auto flex flex-col gap-1.5">
+          <p id="placeholder" class="text-zinc-600 text-sm text-center m-auto">
+            La transcripción aparecerá aquí…
+          </p>
+        </div>
       </div>
-      <div id="transcript-panel"
-        class="w-full h-40 rounded-2xl bg-zinc-900 border border-zinc-800 px-5 py-4 overflow-y-auto flex flex-col gap-1.5">
-        <p id="placeholder" class="text-zinc-600 text-sm text-center m-auto">
-          La transcripción aparecerá aquí…
-        </p>
+
+      <!-- Assistant panel -->
+      <div id="assistant-section">
+        <div class="mb-2 flex items-center gap-2">
+          <div class="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+          <span class="text-xs text-zinc-600 font-medium tracking-wide uppercase">Asistente</span>
+        </div>
+        <div id="assistant-panel"
+          class="w-full h-40 rounded-2xl bg-zinc-900 border border-zinc-800 px-5 py-4 overflow-y-auto flex flex-col gap-1.5">
+          <p id="assistant-placeholder" class="text-zinc-600 text-sm text-center m-auto">
+            La respuesta del asistente aparecerá aquí…
+          </p>
+        </div>
       </div>
+
     </footer>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
       // ── Elements ──────────────────────────────────────────
-      const statusEl      = document.getElementById('status');
-      const startBtn      = document.getElementById('start');
-      const stopBtn       = document.getElementById('stop');
-      const orbWrapper    = document.getElementById('orb-wrapper');
-      const orbGlow       = document.getElementById('orb-glow');
-      const transcriptEl  = document.getElementById('transcript-panel');
-      const placeholder   = document.getElementById('placeholder');
-      const recDot        = document.getElementById('rec-dot');
+      const statusEl          = document.getElementById('status');
+      const startBtn          = document.getElementById('start');
+      const stopBtn           = document.getElementById('stop');
+      const orbWrapper        = document.getElementById('orb-wrapper');
+      const orbGlow           = document.getElementById('orb-glow');
+      const transcriptEl      = document.getElementById('transcript-panel');
+      const placeholder       = document.getElementById('placeholder');
+      const recDot            = document.getElementById('rec-dot');
+      const assistantEl       = document.getElementById('assistant-panel');
+      const assistantPlaceholder = document.getElementById('assistant-placeholder');
 
       // ── State ─────────────────────────────────────────────
       let mediaRecorder   = null;
@@ -141,6 +167,7 @@
       let animationId     = null;
       const finals        = [];   // confirmed transcript segments
       let interim         = '';   // current interim
+      const responses     = [];   // assistant response messages
 
       // ── Audio-reactive orb ────────────────────────────────
       function startAudioAnalysis(src) {
@@ -208,6 +235,19 @@
           : 'w-1.5 h-1.5 rounded-full bg-zinc-700 transition-colors duration-300';
       }
 
+      // ── Assistant panel rendering ─────────────────────────
+      function renderAssistant() {
+        if (assistantPlaceholder) assistantPlaceholder.remove();
+        assistantEl.innerHTML = '';
+        responses.forEach((text) => {
+          const p = document.createElement('p');
+          p.className = 'text-indigo-300 text-sm leading-relaxed';
+          p.textContent = text;
+          assistantEl.appendChild(p);
+        });
+        assistantEl.scrollTop = assistantEl.scrollHeight;
+      }
+
       // ── Socket.io ─────────────────────────────────────────
       const socket = io();
 
@@ -224,6 +264,27 @@
       socket.on('audio-stream:error', (err) => {
         setStatus('Error del servidor', 'border-amber-500/40 bg-amber-950/30 text-amber-400');
         console.error('audio-stream:error', err);
+      });
+
+      socket.on('assistant:response', ({ text }) => {
+        responses.push(text);
+        if (responses.length > 10) responses.shift();
+        renderAssistant();
+      });
+
+      socket.on('assistant:audio', (audioData) => {
+        const ctx = new AudioContext();
+        const buffer = audioData instanceof ArrayBuffer
+          ? audioData
+          : (audioData.buffer ?? audioData);
+        ctx.decodeAudioData(buffer, (decoded) => {
+          const src = ctx.createBufferSource();
+          src.buffer = decoded;
+          src.connect(ctx.destination);
+          src.start();
+        }, (err) => {
+          console.error('Error decoding assistant audio:', err);
+        });
       });
 
       socket.on('transcription', ({ transcript, isFinal }) => {

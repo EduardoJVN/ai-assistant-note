@@ -10,6 +10,10 @@ import { LoggerErrorReporter } from '@infra/adapters/logger-error-reporter.adapt
 import { registerRoutes } from '@infra/entry-points/router.js';
 import { createSocketServer } from '@infra/entry-points/socket-server.js';
 import { DeepgramAdapter } from '@infra/adapters/deepgram.adapter.js';
+import { AnthropicAssistantAdapter } from '@infra/adapters/anthropic-assistant.adapter.js';
+import { GeminiAssistantAdapter } from '@infra/adapters/gemini-assistant.adapter.js';
+import { DeepgramTTSAdapter } from '@infra/adapters/deepgram-tts.adapter.js';
+import { GenerateResponseUseCase } from '@application/ai/use-cases/generate-response.use-case.js';
 import { createProductModule } from '@infra/modules/product.module.js';
 import { createAudioStreamSocketModule } from '@infra/modules/audio-stream.socket-module.js';
 
@@ -17,6 +21,13 @@ async function bootstrap() {
   const logger = new Logger();
   const errorReporter = new LoggerErrorReporter(logger);
   const transcriptionProvider = new DeepgramAdapter(ENV.DEEPGRAM_API_KEY);
+
+  const assistantAdapter =
+    ENV.AI_PROVIDER === 'gemini'
+      ? new GeminiAssistantAdapter(ENV.GEMINI_API_KEY!)
+      : new AnthropicAssistantAdapter(ENV.ANTHROPIC_API_KEY!);
+  const generateResponseUseCase = new GenerateResponseUseCase(assistantAdapter, logger);
+  const ttsAdapter = ENV.RESPONSE_MODE === 'voice' ? new DeepgramTTSAdapter(ENV.DEEPGRAM_API_KEY) : null;
 
   registerProcessErrorHandlers(errorReporter, logger);
 
@@ -42,7 +53,16 @@ async function bootstrap() {
 
   createSocketServer(
     httpServer,
-    [createAudioStreamSocketModule(logger, errorReporter, transcriptionProvider)],
+    [
+      createAudioStreamSocketModule(
+        logger,
+        errorReporter,
+        transcriptionProvider,
+        generateResponseUseCase,
+        ENV.RESPONSE_MODE,
+        ttsAdapter,
+      ),
+    ],
     logger,
   );
 

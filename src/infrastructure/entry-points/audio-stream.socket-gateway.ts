@@ -5,6 +5,8 @@ import type {
   ITranscriptionProvider,
   ITranscriptionSession,
 } from '@domain/transcription/ports/transcription-provider.port.js';
+import type { ITTSProvider } from '@domain/ai/ports/tts-provider.port.js';
+import type { GenerateResponseUseCase } from '@application/ai/use-cases/generate-response.use-case.js';
 import { BaseSocketGateway } from '@infra/entry-points/socket-gateway.js';
 
 export class AudioStreamSocketGateway extends BaseSocketGateway {
@@ -12,6 +14,9 @@ export class AudioStreamSocketGateway extends BaseSocketGateway {
     errorReporter: IErrorReporter,
     private readonly logger: ILogger,
     private readonly transcriptionProvider: ITranscriptionProvider,
+    private readonly generateResponseUseCase: GenerateResponseUseCase,
+    private readonly responseMode: 'text' | 'voice',
+    private readonly ttsProvider: ITTSProvider | null,
   ) {
     super(errorReporter);
   }
@@ -50,6 +55,10 @@ export class AudioStreamSocketGateway extends BaseSocketGateway {
 
     session.onTranscript((result) => {
       socket.emit('transcription', result);
+
+      if (result.isFinal && result.transcript.trim()) {
+        void this.handleAIResponse(socket, result.transcript);
+      }
     });
 
     session.onError((error) => {
@@ -59,5 +68,24 @@ export class AudioStreamSocketGateway extends BaseSocketGateway {
 
     this.logger.info('Transcription session opened', { socketId: socket.id });
     return session;
+  }
+
+  private async handleAIResponse(socket: Socket, transcript: string): Promise<void> {
+    try {
+      const { response } = await this.generateResponseUseCase.execute({ transcript });
+      if (!response) return;
+
+      if (this.responseMode === 'voice' && this.ttsProvider) {
+        const audio = await this.ttsProvider.synthesize(response);
+        socket.emit('assistant:audio', audio);
+      } else {
+        socket.emit('assistant:response', { text: response });
+      }
+    } catch (error) {
+      this.logger.error('AI response generation failed', {
+        error: error instanceof Error ? error.message : String(error),
+        socketId: socket.id,
+      });
+    }
   }
 }
