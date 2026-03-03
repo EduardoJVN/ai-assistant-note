@@ -1,5 +1,6 @@
 import { createClient, LiveTranscriptionEvents } from '@deepgram/sdk';
 import type { ListenLiveClient } from '@deepgram/sdk';
+import WS from 'ws';
 import type {
   ITranscriptionProvider,
   ITranscriptionSession,
@@ -10,15 +11,28 @@ class DeepgramSession implements ITranscriptionSession {
   private readonly connection: ListenLiveClient;
   private transcriptCallback?: (result: TranscriptionResult) => void;
   private errorCallback?: (error: Error) => void;
+  private isOpen = false;
+  private pendingChunks: Buffer[] = [];
 
   constructor(apiKey: string) {
-    const client = createClient(apiKey);
+    // Node.js 22+ exposes globalThis.WebSocket (undici), which makes the Deepgram SDK
+    // use browser-style subprotocol auth instead of Authorization headers.
+    // Forcing the ws package here ensures the SDK always uses header-based auth.
+    const client = createClient(apiKey, {
+      global: { websocket: { client: WS as unknown as typeof WebSocket } },
+    });
 
     this.connection = client.listen.live({
       model: 'nova-2',
       language: 'es',
       smart_format: true,
       encoding: 'webm-opus',
+    });
+
+    this.connection.on(LiveTranscriptionEvents.Open, () => {
+      this.isOpen = true;
+      this.pendingChunks.forEach((chunk) => this.connection.send(chunk));
+      this.pendingChunks = [];
     });
 
     this.connection.on(LiveTranscriptionEvents.Transcript, (data) => {
@@ -30,13 +44,27 @@ class DeepgramSession implements ITranscriptionSession {
 
     this.connection.on(LiveTranscriptionEvents.Error, (error) => {
       if (this.errorCallback) {
-        this.errorCallback(new Error(String(error)));
+        const message =
+          error instanceof Error
+            ? error.message
+            : typeof error === 'string'
+              ? error
+              : JSON.stringify(error);
+        this.errorCallback(new Error(message));
       }
+    });
+
+    this.connection.on(LiveTranscriptionEvents.Close, () => {
+      this.isOpen = false;
     });
   }
 
   sendChunk(chunk: Buffer): void {
-    this.connection.send(chunk);
+    if (this.isOpen) {
+      this.connection.send(chunk);
+    } else {
+      this.pendingChunks.push(chunk);
+    }
   }
 
   close(): void {
