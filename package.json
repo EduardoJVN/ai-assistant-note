@@ -51,6 +51,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "@deepgram/sdk": "^4.11.3",
     "express": "^5.2.1",
     "pino": "^10.3.1",
     "socket.io": "^4.8.3",

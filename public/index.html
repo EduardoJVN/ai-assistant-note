@@ -165,6 +165,10 @@
         log(`Error del servidor: ${JSON.stringify(error)}`, 'err');
       });
 
+      socket.on('transcription', ({ transcript, isFinal }) => {
+        log(`${isFinal ? '✓' : '…'} ${transcript}`, isFinal ? 'ok' : '');
+      });
+
       // ── Controles ──────────────────────────────────────────────
       startBtn.addEventListener('click', async () => {
         try {

@@ -10,6 +10,7 @@ const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   HOST: z.string().min(1).default('localhost'),
+  DEEPGRAM_API_KEY: z.string().min(1),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

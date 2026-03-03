@@ -9,12 +9,14 @@ import { Logger } from '@infra/adapters/pino-logger.adapter.js';
 import { LoggerErrorReporter } from '@infra/adapters/logger-error-reporter.adapter.js';
 import { registerRoutes } from '@infra/entry-points/router.js';
 import { createSocketServer } from '@infra/entry-points/socket-server.js';
+import { DeepgramAdapter } from '@infra/adapters/deepgram.adapter.js';
 import { createProductModule } from '@infra/modules/product.module.js';
 import { createAudioStreamSocketModule } from '@infra/modules/audio-stream.socket-module.js';
 
 async function bootstrap() {
   const logger = new Logger();
   const errorReporter = new LoggerErrorReporter(logger);
+  const transcriptionProvider = new DeepgramAdapter(ENV.DEEPGRAM_API_KEY);
 
   registerProcessErrorHandlers(errorReporter, logger);
 
@@ -38,7 +40,11 @@ async function bootstrap() {
 
   const httpServer = createServer(app);
 
-  createSocketServer(httpServer, [createAudioStreamSocketModule(logger, errorReporter)], logger);
+  createSocketServer(
+    httpServer,
+    [createAudioStreamSocketModule(logger, errorReporter, transcriptionProvider)],
+    logger,
+  );
 
   httpServer.listen(ENV.PORT, () => {
     reportBootstrap(logger);

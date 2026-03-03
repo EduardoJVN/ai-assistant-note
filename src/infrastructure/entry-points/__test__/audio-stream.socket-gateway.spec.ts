@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AudioStreamSocketGateway } from '../audio-stream.socket-gateway.js';
 import type { IErrorReporter } from '@domain/ports/error-reporter.port.js';
 import type { ILogger } from '@domain/ports/logger.port.js';
+import type {
+  ITranscriptionProvider,
+  ITranscriptionSession,
+  TranscriptionResult,
+} from '@domain/transcription/ports/transcription-provider.port.js';
 import type { Socket } from 'socket.io';
 
 class MockErrorReporter implements IErrorReporter {
@@ -15,6 +20,31 @@ class MockLogger implements ILogger {
   debug = vi.fn();
 }
 
+class MockSession implements ITranscriptionSession {
+  sendChunk = vi.fn();
+  close = vi.fn();
+  private transcriptCb?: (result: TranscriptionResult) => void;
+  private errorCb?: (error: Error) => void;
+
+  onTranscript(callback: (result: TranscriptionResult) => void): void {
+    this.transcriptCb = callback;
+  }
+  onError(callback: (error: Error) => void): void {
+    this.errorCb = callback;
+  }
+  emitTranscript(result: TranscriptionResult): void {
+    this.transcriptCb?.(result);
+  }
+  emitError(error: Error): void {
+    this.errorCb?.(error);
+  }
+}
+
+class MockTranscriptionProvider implements ITranscriptionProvider {
+  session = new MockSession();
+  createSession = vi.fn(() => this.session);
+}
+
 class MockSocket {
   id = 'socket-test-id';
   private handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -23,11 +53,9 @@ class MockSocket {
   on(event: string, handler: (...args: unknown[]) => unknown): void {
     this.handlers.set(event, handler);
   }
-
   emit(event: string, data: unknown): void {
     this.emitted.push({ event, data });
   }
-
   async trigger(event: string, ...args: unknown[]): Promise<void> {
     const handler = this.handlers.get(event);
     if (handler) await handler(...args);
@@ -37,56 +65,81 @@ class MockSocket {
 describe('AudioStreamSocketGateway', () => {
   let reporter: MockErrorReporter;
   let logger: MockLogger;
+  let provider: MockTranscriptionProvider;
   let gateway: AudioStreamSocketGateway;
   let socket: MockSocket;
 
   beforeEach(() => {
     reporter = new MockErrorReporter();
     logger = new MockLogger();
-    gateway = new AudioStreamSocketGateway(reporter, logger);
+    provider = new MockTranscriptionProvider();
+    gateway = new AudioStreamSocketGateway(reporter, logger, provider);
     socket = new MockSocket();
     gateway.register(socket as unknown as Socket);
   });
 
-  it('registers the audio-stream listener on the socket', () => {
-    expect(socket['handlers'].has('audio-stream')).toBe(true);
+  it('does not create a session until the first audio chunk arrives', () => {
+    expect(provider.createSession).not.toHaveBeenCalled();
   });
 
-  it('logs receipt with socketId and byte length when a chunk arrives', async () => {
-    const chunk = Buffer.from([1, 2, 3, 4]);
+  it('opens a transcription session on the first chunk', async () => {
+    await socket.trigger('audio-stream', Buffer.from([1]));
+
+    expect(provider.createSession).toHaveBeenCalledOnce();
+  });
+
+  it('reuses the same session for subsequent chunks', async () => {
+    await socket.trigger('audio-stream', Buffer.from([1]));
+    await socket.trigger('audio-stream', Buffer.from([2]));
+
+    expect(provider.createSession).toHaveBeenCalledOnce();
+    expect(provider.session.sendChunk).toHaveBeenCalledTimes(2);
+  });
+
+  it('forwards each chunk to the session', async () => {
+    const chunk = Buffer.from([1, 2, 3]);
 
     await socket.trigger('audio-stream', chunk);
 
-    expect(logger.info).toHaveBeenCalledWith('Audio chunk received', {
-      socketId: 'socket-test-id',
-      bytes: 4,
+    expect(provider.session.sendChunk).toHaveBeenCalledWith(chunk);
+  });
+
+  it('emits transcription event to socket when Deepgram responds', async () => {
+    await socket.trigger('audio-stream', Buffer.from([1]));
+    provider.session.emitTranscript({ transcript: 'hola mundo', isFinal: true });
+
+    expect(socket.emitted).toContainEqual({
+      event: 'transcription',
+      data: { transcript: 'hola mundo', isFinal: true },
     });
   });
 
-  it('emits audio-stream:error when processing fails', async () => {
-    logger.info.mockImplementation(() => {
-      throw new Error('unexpected failure');
-    });
-
+  it('closes the session on socket disconnect', async () => {
     await socket.trigger('audio-stream', Buffer.from([1]));
+    await socket.trigger('disconnect');
+
+    expect(provider.session.close).toHaveBeenCalledOnce();
+  });
+
+  it('does not crash on disconnect if no session was opened', async () => {
+    await expect(socket.trigger('disconnect')).resolves.toBeUndefined();
+  });
+
+  it('reports session errors to IErrorReporter', async () => {
+    await socket.trigger('audio-stream', Buffer.from([1]));
+    const boom = new Error('deepgram connection lost');
+    provider.session.emitError(boom);
+
+    expect(reporter.report).toHaveBeenCalledWith(boom, {
+      type: 'deepgram-session-error',
+      socketId: 'socket-test-id',
+    });
+  });
+
+  it('emits audio-stream:error to socket on session error', async () => {
+    await socket.trigger('audio-stream', Buffer.from([1]));
+    provider.session.emitError(new Error('deepgram connection lost'));
 
     expect(socket.emitted).toContainEqual(expect.objectContaining({ event: 'audio-stream:error' }));
-  });
-
-  it('reports unexpected errors to IErrorReporter', async () => {
-    const boom = new Error('unexpected failure');
-    logger.info.mockImplementation(() => {
-      throw boom;
-    });
-
-    await socket.trigger('audio-stream', Buffer.from([1]));
-
-    expect(reporter.report).toHaveBeenCalledWith(boom, { type: 'unhandled-socket-error' });
-  });
-
-  it('does not report errors for empty chunks', async () => {
-    await socket.trigger('audio-stream', Buffer.alloc(0));
-
-    expect(reporter.report).not.toHaveBeenCalled();
   });
 });
